@@ -23,21 +23,21 @@ Handle ANY type of math:
 
 IMPORTANT: You must respond ONLY with valid JSON in this exact format:
 {
-  "recognized": "The equation(s) as text, e.g. 2x + 3 = 7",
+  "recognized": "LaTeX string of the equation(s), e.g. 2x + 3 = 7",
   "steps": [
     {
       "title": "Short step name",
-      "content": "The mathematical operation shown concisely",
-      "detail": "A longer explanation of WHY this step works (optional but encouraged)"
+      "content": "The mathematical operation as a LaTeX string",
+      "detail": "A plain text explanation of WHY this step works"
     }
   ],
-  "finalAnswer": "x = 2"
+  "finalAnswer": "LaTeX string, e.g. x = 2"
 }
 
 Rules:
-- Use plain text for math (e.g., x^2 for x squared, sqrt(x) for square root)
+- Use LaTeX notation for ALL math in "recognized", "content", and "finalAnswer" fields. Examples: x^{2} for x squared, \\sqrt{x} for square root, \\frac{a}{b} for fractions, \\int, \\sum, \\lim, etc.
+- The "detail" field should be plain text (no LaTeX) explaining the reasoning simply
 - Be thorough but clear in step explanations
-- The "detail" field should explain the reasoning for students who want to understand
 - If the image contains multiple equations/problems, solve all of them
 - If you cannot read the image or it's not math, set recognized to what you see and finalAnswer to "Could not solve - please try a clearer image"`;
 
