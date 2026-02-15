@@ -1,74 +1,124 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import CameraCapture from "@/components/CameraCapture";
 import Solution from "@/components/Solution";
+import FloatingPanel from "@/components/FloatingPanel";
+import StickyNoteComponent from "@/components/StickyNote";
+import SessionHistory from "@/components/SessionHistory";
+import {
+  type Session,
+  type SolveResult,
+  type StickyNote,
+  type ChatMessage,
+  getSessions,
+  getSession,
+  saveSession,
+  deleteSession,
+  getCurrentSessionId,
+  setCurrentSessionId,
+  createSession,
+} from "@/lib/storage";
 
-export type SolveResult = {
-  recognized: string;
-  steps: { title: string; content: string; detail?: string }[];
-  finalAnswer: string;
-};
+// Re-export for any existing imports
+export type { SolveResult } from "@/lib/storage";
 
 export default function Home() {
-  const [image, setImage] = useState<string | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<SolveResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const solve = useCallback(async (base64: string) => {
-    setImage(base64);
-    setResult(null);
-    setError(null);
-    setLoading(true);
+  // Initialize session from localStorage on mount
+  useEffect(() => {
+    const currentId = getCurrentSessionId();
+    const allSessions = getSessions();
+    setSessions(allSessions);
 
-    try {
-      const res = await fetch("/api/solve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: base64 }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to solve equation");
+    if (currentId) {
+      const existing = getSession(currentId);
+      if (existing) {
+        setSession(existing);
+        setMounted(true);
+        return;
       }
-
-      const data: SolveResult = await res.json();
-      setResult(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setLoading(false);
     }
+    // No valid session — create one
+    const newSession = createSession();
+    saveSession(newSession);
+    setCurrentSessionId(newSession.id);
+    setSession(newSession);
+    setSessions(getSessions());
+    setMounted(true);
   }, []);
 
-  const resolveFromText = useCallback(async (corrected: string) => {
-    setResult(null);
-    setError(null);
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/solve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ corrected }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to solve equation");
-      }
-
-      const data: SolveResult = await res.json();
-      setResult(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
+  const updateSession = useCallback((updated: Session) => {
+    setSession(updated);
+    saveSession(updated);
+    setSessions(getSessions());
   }, []);
+
+  const solve = useCallback(
+    async (base64: string) => {
+      if (!session) return;
+      const updated = { ...session, image: base64, result: null };
+      updateSession(updated);
+      setError(null);
+      setLoading(true);
+
+      try {
+        const res = await fetch("/api/solve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64 }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to solve equation");
+        }
+
+        const data: SolveResult = await res.json();
+        updateSession({ ...session, image: base64, result: data });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [session, updateSession]
+  );
+
+  const resolveFromText = useCallback(
+    async (corrected: string) => {
+      if (!session) return;
+      setError(null);
+      setLoading(true);
+
+      try {
+        const res = await fetch("/api/solve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ corrected }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to solve equation");
+        }
+
+        const data: SolveResult = await res.json();
+        updateSession({ ...session, result: data });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [session, updateSession]
+  );
 
   const handleFile = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,32 +135,149 @@ export default function Home() {
     [solve]
   );
 
-  const reset = useCallback(() => {
-    setImage(null);
-    setResult(null);
+  const startNewSession = useCallback(() => {
+    const newSession = createSession();
+    saveSession(newSession);
+    setCurrentSessionId(newSession.id);
+    setSession(newSession);
+    setSessions(getSessions());
     setError(null);
     setLoading(false);
   }, []);
 
+  const switchToSession = useCallback((id: string) => {
+    const s = getSession(id);
+    if (s) {
+      setSession(s);
+      setCurrentSessionId(id);
+      setError(null);
+      setLoading(false);
+    }
+  }, []);
+
+  const handleDeleteSession = useCallback(
+    (id: string) => {
+      deleteSession(id);
+      setSessions(getSessions());
+    },
+    []
+  );
+
+  // Sticky notes
+  const addNote = useCallback(() => {
+    if (!session) return;
+    const note: StickyNote = {
+      id: crypto.randomUUID(),
+      text: "",
+      x: 10 + Math.random() * 30,
+      y: 10 + Math.random() * 30,
+      color: "#fef08a",
+    };
+    updateSession({ ...session, notes: [...session.notes, note] });
+  }, [session, updateSession]);
+
+  const updateNote = useCallback(
+    (note: StickyNote) => {
+      if (!session) return;
+      updateSession({
+        ...session,
+        notes: session.notes.map((n) => (n.id === note.id ? note : n)),
+      });
+    },
+    [session, updateSession]
+  );
+
+  const deleteNote = useCallback(
+    (id: string) => {
+      if (!session) return;
+      updateSession({
+        ...session,
+        notes: session.notes.filter((n) => n.id !== id),
+      });
+    },
+    [session, updateSession]
+  );
+
+  // Chat
+  const handleSendMessage = useCallback(
+    async (message: string): Promise<string | null> => {
+      if (!session) return null;
+      const userMsg: ChatMessage = { role: "user", content: message };
+      const updatedMessages = [...session.chatMessages, userMsg];
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: updatedMessages,
+            equation: session.result?.recognized || null,
+          }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          const errorMsg: ChatMessage = { role: "assistant", content: `Error: ${data.error}` };
+          updateSession({ ...session, chatMessages: [...updatedMessages, errorMsg] });
+          return null;
+        }
+        const assistantMsg: ChatMessage = { role: "assistant", content: data.content };
+        updateSession({ ...session, chatMessages: [...updatedMessages, assistantMsg] });
+        return data.correctedEquation || null;
+      } catch {
+        const errorMsg: ChatMessage = { role: "assistant", content: "Failed to get response." };
+        updateSession({ ...session, chatMessages: [...updatedMessages, errorMsg] });
+        return null;
+      }
+    },
+    [session, updateSession]
+  );
+
+  if (!mounted || !session) return null;
+
+  const { image, result, notes, chatMessages } = session;
+
   return (
-    <div className="min-h-dvh flex flex-col">
+    <div className="min-h-dvh flex flex-col relative">
+      {/* Sticky notes overlay */}
+      {notes.length > 0 && (
+        <div className="sticky-notes-container">
+          {notes.map((note) => (
+            <StickyNoteComponent
+              key={note.id}
+              note={note}
+              onUpdate={updateNote}
+              onDelete={deleteNote}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Header */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border">
-        <button onClick={reset} className="flex items-center gap-2">
+      <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border relative z-10">
+        <button onClick={startNewSession} className="flex items-center gap-2">
           <h1 className="text-lg font-semibold tracking-tight">calc01</h1>
         </button>
-        {(image || result) && (
-          <button
-            onClick={reset}
-            className="text-sm text-muted hover:text-foreground transition-colors"
-          >
-            New
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <SessionHistory
+            sessions={sessions}
+            currentId={session.id}
+            onSelect={switchToSession}
+            onDelete={handleDeleteSession}
+            onNew={startNewSession}
+          />
+          {(image || result) && (
+            <button
+              onClick={startNewSession}
+              className="text-sm text-muted hover:text-foreground transition-colors"
+            >
+              New
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col items-center w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <main className="flex-1 flex flex-col items-center w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-10 relative z-[1]">
         {!image && !result && (
           <div className="flex-1 flex flex-col items-center justify-center w-full gap-6">
             <div className="text-center space-y-2 mb-4">
@@ -189,7 +356,7 @@ export default function Home() {
               {error}
             </div>
             <button
-              onClick={reset}
+              onClick={startNewSession}
               className="text-sm text-accent hover:underline"
             >
               Try again
@@ -199,14 +366,26 @@ export default function Home() {
 
         {/* Result */}
         {result && !loading && (
-          <Solution result={result} image={image} onReset={reset} onResolve={resolveFromText} />
+          <Solution result={result} image={image} onReset={startNewSession} />
         )}
       </main>
 
       {/* Footer */}
-      <footer className="text-center text-xs text-muted py-4 border-t border-border">
+      <footer className="text-center text-xs text-muted py-4 border-t border-border relative z-10">
         Powered by AI vision &mdash; results may need verification
       </footer>
+
+      {/* Floating panel */}
+      <FloatingPanel
+        chatMessages={chatMessages}
+        equation={result?.recognized || null}
+        notes={notes}
+        onSendMessage={handleSendMessage}
+        onApplyCorrection={resolveFromText}
+        onAddNote={addNote}
+        onEditNote={updateNote}
+        onDeleteNote={deleteNote}
+      />
     </div>
   );
 }
