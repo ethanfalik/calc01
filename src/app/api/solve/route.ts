@@ -39,7 +39,7 @@ Rules:
 - The "detail" field should be plain text (no LaTeX) explaining the reasoning simply
 - Be thorough but clear in step explanations
 - If the image contains multiple equations/problems, solve all of them
-- A 7 with a horizontal line through it is a seven, not a one. Distinguish between 1 and 7 carefully — a crossed 7 (7̶) is always a seven.
+- IMPORTANT for handwriting recognition: The writer's 1s and 7s look very similar. The ONLY way to distinguish them is that 7s have a small horizontal line/cross through the vertical stroke, and 1s do not. If a digit has a cross stroke, it is a 7. If it has no cross stroke, it is a 1.
 - If you cannot read the image or it's not math, set recognized to what you see and finalAnswer to "Could not solve - please try a clearer image"`;
 
 export async function POST(req: NextRequest) {
