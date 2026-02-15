@@ -39,6 +39,7 @@ Rules:
 - The "detail" field should be plain text (no LaTeX) explaining the reasoning simply
 - Be thorough but clear in step explanations
 - If the image contains multiple equations/problems, solve all of them
+- A 7 with a horizontal line through it is a seven, not a one. Distinguish between 1 and 7 carefully — a crossed 7 (7̶) is always a seven.
 - If you cannot read the image or it's not math, set recognized to what you see and finalAnswer to "Could not solve - please try a clearer image"`;
 
 export async function POST(req: NextRequest) {
