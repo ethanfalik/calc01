@@ -44,6 +44,32 @@ export default function Home() {
     }
   }, []);
 
+  const resolveFromText = useCallback(async (corrected: string) => {
+    setResult(null);
+    setError(null);
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/solve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ corrected }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to solve equation");
+      }
+
+      const data: SolveResult = await res.json();
+      setResult(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const handleFile = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -173,7 +199,7 @@ export default function Home() {
 
         {/* Result */}
         {result && !loading && (
-          <Solution result={result} image={image} onReset={reset} />
+          <Solution result={result} image={image} onReset={reset} onResolve={resolveFromText} />
         )}
       </main>
 

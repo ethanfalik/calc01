@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const SYSTEM_PROMPT = `You are a math equation solver. You receive an image of a math equation or problem.
+const IMAGE_PROMPT = `You are a math equation solver. You receive an image of a math equation or problem.
 
 Your job:
 1. Recognize EXACTLY what is written in the image (equations, expressions, systems of equations, etc.)
@@ -42,13 +42,60 @@ Rules:
 - Pay careful attention to distinguishing similar-looking handwritten characters (e.g. 1 vs 7, 2 vs z, 5 vs s). Use context and surrounding characters to resolve ambiguity.
 - If you cannot read the image or it's not math, set recognized to what you see and finalAnswer to "Could not solve - please try a clearer image"`;
 
+const TEXT_PROMPT = `You are a math equation solver. You receive a corrected equation or math problem as LaTeX text.
+
+Solve it step by step and return a JSON response.
+
+IMPORTANT: You must respond ONLY with valid JSON in this exact format:
+{
+  "recognized": "The corrected equation as given",
+  "steps": [
+    {
+      "title": "Short step name",
+      "content": "The mathematical operation as a LaTeX string",
+      "detail": "A plain text explanation of WHY this step works"
+    }
+  ],
+  "finalAnswer": "LaTeX string, e.g. x = 2"
+}
+
+Rules:
+- Use LaTeX notation for ALL math in "recognized", "content", and "finalAnswer" fields.
+- The "detail" field should be plain text (no LaTeX) explaining the reasoning simply
+- Be thorough but clear in step explanations`;
+
+async function callGemini(
+  genAI: GoogleGenerativeAI,
+  parts: { text: string }[] | ({ text: string } | { inlineData: { mimeType: string; data: string } })[]
+) {
+  const models = ["gemini-2.0-flash", "gemini-2.0-flash-lite"];
+  for (const modelName of models) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          maxOutputTokens: 4096,
+        },
+      });
+      const content = result.response.text();
+      if (content) return content;
+    } catch (e) {
+      if (modelName === models[models.length - 1]) throw e;
+    }
+  }
+  return undefined;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { image } = await req.json();
+    const body = await req.json();
+    const { image, corrected } = body;
 
-    if (!image || typeof image !== "string") {
+    if (!image && !corrected) {
       return NextResponse.json(
-        { error: "No image provided" },
+        { error: "No image or equation provided" },
         { status: 400 }
       );
     }
@@ -61,51 +108,29 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    // Extract base64 data and mime type from data URL
-    const match = image.match(/^data:(.+?);base64,(.+)$/);
-    if (!match) {
-      return NextResponse.json(
-        { error: "Invalid image format" },
-        { status: 400 }
-      );
-    }
-
-    const [, mimeType, base64Data] = match;
-
-    const models = ["gemini-2.0-flash", "gemini-2.0-flash-lite"];
     let content: string | undefined;
 
-    for (const modelName of models) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: SYSTEM_PROMPT + "\n\nRecognize and solve this equation/problem. Respond with JSON only." },
-                {
-                  inlineData: {
-                    mimeType,
-                    data: base64Data,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            maxOutputTokens: 4096,
-          },
-        });
-        content = result.response.text();
-        if (content) break;
-      } catch (e) {
-        // If last model also fails, rethrow
-        if (modelName === models[models.length - 1]) throw e;
+    if (corrected) {
+      // Re-solve from corrected text
+      content = await callGemini(genAI, [
+        { text: TEXT_PROMPT + `\n\nSolve this equation: ${corrected}\n\nRespond with JSON only.` },
+      ]);
+    } else {
+      // Solve from image
+      const match = image.match(/^data:(.+?);base64,(.+)$/);
+      if (!match) {
+        return NextResponse.json(
+          { error: "Invalid image format" },
+          { status: 400 }
+        );
       }
+      const [, mimeType, base64Data] = match;
+      content = await callGemini(genAI, [
+        { text: IMAGE_PROMPT + "\n\nRecognize and solve this equation/problem. Respond with JSON only." },
+        { inlineData: { mimeType, data: base64Data } },
+      ]);
     }
+
     if (!content) {
       return NextResponse.json(
         { error: "No response from AI" },
