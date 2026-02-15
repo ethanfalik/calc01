@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const SYSTEM_PROMPT = `You are a math equation solver. You receive an image of a math equation or problem.
 
@@ -54,41 +52,49 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: "API key not configured. Set OPENAI_API_KEY environment variable." },
+        { error: "API key not configured. Set GEMINI_API_KEY environment variable." },
         { status: 500 }
       );
     }
 
-    // Strip data URL prefix if present for the API, or keep it
-    const imageContent = image.startsWith("data:")
-      ? image
-      : `data:image/jpeg;base64,${image}`;
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      max_tokens: 4096,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+    // Extract base64 data and mime type from data URL
+    const match = image.match(/^data:(.+?);base64,(.+)$/);
+    if (!match) {
+      return NextResponse.json(
+        { error: "Invalid image format" },
+        { status: 400 }
+      );
+    }
+
+    const [, mimeType, base64Data] = match;
+
+    const result = await model.generateContent({
+      contents: [
         {
           role: "user",
-          content: [
+          parts: [
+            { text: SYSTEM_PROMPT + "\n\nRecognize and solve this equation/problem. Respond with JSON only." },
             {
-              type: "image_url",
-              image_url: { url: imageContent, detail: "high" },
-            },
-            {
-              type: "text",
-              text: "Recognize and solve this equation/problem. Respond with JSON only.",
+              inlineData: {
+                mimeType,
+                data: base64Data,
+              },
             },
           ],
         },
       ],
-      response_format: { type: "json_object" },
+      generationConfig: {
+        responseMimeType: "application/json",
+        maxOutputTokens: 4096,
+      },
     });
 
-    const content = response.choices[0]?.message?.content;
+    const content = result.response.text();
     if (!content) {
       return NextResponse.json(
         { error: "No response from AI" },
@@ -98,7 +104,6 @@ export async function POST(req: NextRequest) {
 
     const parsed = JSON.parse(content);
 
-    // Validate shape
     if (!parsed.recognized || !parsed.steps || !parsed.finalAnswer) {
       return NextResponse.json(
         { error: "Invalid response format from AI" },
