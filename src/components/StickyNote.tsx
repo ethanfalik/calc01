@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { StickyNote as StickyNoteType } from "@/lib/storage";
 
-const COLORS = ["#fef08a", "#fde68a", "#bbf7d0", "#bfdbfe", "#e9d5ff", "#fecdd3"];
+const COLORS = ["#fff9c4", "#ffe0b2", "#c8e6c9", "#b3e5fc", "#e1bee7", "#f8bbd0"];
 
 export default function StickyNote({
   note,

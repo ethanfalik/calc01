@@ -171,7 +171,7 @@ export default function Home() {
       text: "",
       x: 10 + Math.random() * 30,
       y: 10 + Math.random() * 30,
-      color: "#fef08a",
+      color: "#fff9c4",
     };
     updateSession({ ...session, notes: [...session.notes, note] });
   }, [session, updateSession]);
