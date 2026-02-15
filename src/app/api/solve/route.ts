@@ -60,7 +60,6 @@ export async function POST(req: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // Extract base64 data and mime type from data URL
     const match = image.match(/^data:(.+?);base64,(.+)$/);
@@ -73,28 +72,39 @@ export async function POST(req: NextRequest) {
 
     const [, mimeType, base64Data] = match;
 
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: SYSTEM_PROMPT + "\n\nRecognize and solve this equation/problem. Respond with JSON only." },
+    const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+    let content: string | undefined;
+
+    for (const modelName of models) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent({
+          contents: [
             {
-              inlineData: {
-                mimeType,
-                data: base64Data,
-              },
+              role: "user",
+              parts: [
+                { text: SYSTEM_PROMPT + "\n\nRecognize and solve this equation/problem. Respond with JSON only." },
+                {
+                  inlineData: {
+                    mimeType,
+                    data: base64Data,
+                  },
+                },
+              ],
             },
           ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        maxOutputTokens: 4096,
-      },
-    });
-
-    const content = result.response.text();
+          generationConfig: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 4096,
+          },
+        });
+        content = result.response.text();
+        if (content) break;
+      } catch (e) {
+        // If last model also fails, rethrow
+        if (modelName === models[models.length - 1]) throw e;
+      }
+    }
     if (!content) {
       return NextResponse.json(
         { error: "No response from AI" },
@@ -114,8 +124,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(parsed);
   } catch (error) {
     console.error("Solve error:", error);
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
+    const raw = error instanceof Error ? error.message : "Internal server error";
+    let message = raw;
+    if (raw.includes("429") || raw.includes("quota")) {
+      message = "Rate limit reached. Please wait a moment and try again.";
+    } else if (raw.includes("API_KEY") || raw.includes("403")) {
+      message = "Invalid API key. Check your GEMINI_API_KEY configuration.";
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
