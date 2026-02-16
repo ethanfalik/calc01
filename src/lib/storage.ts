@@ -45,12 +45,16 @@ export function getSession(id: string): Session | undefined {
 
 export function saveSession(session: Session): void {
   const sessions = getSessions();
+  // Strip image data before persisting — base64 images blow past localStorage quota
+  const toStore = { ...session, image: null };
   const idx = sessions.findIndex((s) => s.id === session.id);
   if (idx >= 0) {
-    sessions[idx] = session;
+    sessions[idx] = toStore;
   } else {
-    sessions.unshift(session);
+    sessions.unshift(toStore);
   }
+  // Keep at most 20 sessions to avoid gradual quota creep
+  if (sessions.length > 20) sessions.length = 20;
   localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
 }
 
