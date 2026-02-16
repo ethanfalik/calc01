@@ -9,12 +9,10 @@ Your job:
 - If the user asks to change numbers or variables, provide the corrected equation
 - Be concise and friendly
 
-IMPORTANT: If the user asks you to modify the equation (e.g. "change the 7 to a 1", "what if x = 3?", "make it a quadratic"), include a JSON block at the END of your response like this:
-\`\`\`json
-{"correctedEquation": "the new LaTeX equation here"}
-\`\`\`
+IMPORTANT: If the user asks you to modify the equation (e.g. "change the 7 to a 1", "what if x = 3?", "make it a quadratic"), include a CORRECTED_EQUATION tag at the END of your response like this:
+<CORRECTED_EQUATION>the new LaTeX equation here</CORRECTED_EQUATION>
 
-Only include the JSON block when suggesting a new equation to solve. For explanations or general questions, just respond normally in plain text. Use LaTeX notation wrapped in $ signs for inline math when explaining.`;
+Only include the tag when suggesting a new equation to solve. For explanations or general questions, just respond normally in plain text. Use LaTeX notation wrapped in $ signs for inline math when explaining.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -68,13 +66,12 @@ export async function POST(req: NextRequest) {
 
     // Extract corrected equation if present
     let correctedEquation: string | null = null;
-    const jsonMatch = text.match(/```json\s*\{[^}]*"correctedEquation"\s*:\s*"([^"]+)"[^}]*\}\s*```/);
-    if (jsonMatch) {
-      correctedEquation = jsonMatch[1];
+    const tagMatch = text.match(/<CORRECTED_EQUATION>([\s\S]*?)<\/CORRECTED_EQUATION>/);
+    let cleanText = text;
+    if (tagMatch) {
+      correctedEquation = tagMatch[1].trim();
+      cleanText = text.replace(/<CORRECTED_EQUATION>[\s\S]*?<\/CORRECTED_EQUATION>/, "").trim();
     }
-
-    // Clean the response text (remove the JSON block for display)
-    const cleanText = text.replace(/```json\s*\{[^}]*"correctedEquation"[^}]*\}\s*```/, "").trim();
 
     return NextResponse.json({
       content: cleanText,
