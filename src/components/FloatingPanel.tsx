@@ -3,6 +3,18 @@
 import { useState, useRef, useCallback } from "react";
 import type { ChatMessage, StickyNote } from "@/lib/storage";
 
+function clampPosition(x: number, y: number, elWidth: number, elHeight: number) {
+  const maxX = window.innerWidth - 20 - elWidth;
+  const maxY = window.innerHeight - 20 - elHeight;
+  // position is an offset from the default bottom-right anchor, so negative x = left, negative y = up
+  const minX = -(window.innerWidth - 20 - elWidth);
+  const minY = -(window.innerHeight - 20 - elHeight);
+  return {
+    x: Math.max(minX, Math.min(0, x)),
+    y: Math.max(minY, Math.min(0, y)),
+  };
+}
+
 export default function FloatingPanel({
   chatMessages,
   equation,
@@ -71,10 +83,10 @@ export default function FloatingPanel({
       if (!dragRef.current) return;
       const dx = e.clientX - dragRef.current.startX;
       const dy = e.clientY - dragRef.current.startY;
-      setPosition({
-        x: dragRef.current.posX + dx,
-        y: dragRef.current.posY + dy,
-      });
+      const el = panelRef.current;
+      const w = el ? el.offsetWidth : 320;
+      const h = el ? el.offsetHeight : 460;
+      setPosition(clampPosition(dragRef.current.posX + dx, dragRef.current.posY + dy, w, h));
     },
     []
   );
@@ -83,13 +95,15 @@ export default function FloatingPanel({
     dragRef.current = null;
   }, []);
 
+  const handleCollapse = useCallback(() => {
+    setCollapsed(true);
+    setPosition({ x: 0, y: 0 });
+  }, []);
+
   if (collapsed) {
     return (
       <button
         className="floating-pill"
-        style={{
-          transform: `translate(${position.x}px, ${position.y}px)`,
-        }}
         onClick={() => setCollapsed(false)}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -132,7 +146,7 @@ export default function FloatingPanel({
         <button
           data-no-drag
           className="floating-panel-close"
-          onClick={() => setCollapsed(true)}
+          onClick={handleCollapse}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M19 9l-7 7-7-7" />
