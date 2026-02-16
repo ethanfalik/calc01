@@ -202,6 +202,9 @@ body {
   bottom: 20px;
   right: 20px;
   z-index: 50;
+}
+
+.floating-pill-inner {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -217,7 +220,7 @@ body {
   transition: box-shadow 0.15s, background 0.15s;
 }
 
-.floating-pill:hover {
+.floating-pill-inner:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   background: var(--surface-hover);
 }

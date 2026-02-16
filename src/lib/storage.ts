@@ -29,12 +29,22 @@ export type Session = {
 const SESSIONS_KEY = "calc01_sessions";
 const CURRENT_KEY = "calc01_current_session";
 
+function stripImages(sessions: Session[]): Session[] {
+  return sessions.map((s) => ({ ...s, image: null }));
+}
+
 export function getSessions(): Session[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(SESSIONS_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Session[];
+    // Sanitize: strip any lingering image data from old sessions
+    const clean = stripImages(parsed);
+    return clean;
   } catch {
+    // Corrupted data — nuke it
+    localStorage.removeItem(SESSIONS_KEY);
     return [];
   }
 }
@@ -44,23 +54,37 @@ export function getSession(id: string): Session | undefined {
 }
 
 export function saveSession(session: Session): void {
-  const sessions = getSessions();
-  // Strip image data before persisting — base64 images blow past localStorage quota
-  const toStore = { ...session, image: null };
-  const idx = sessions.findIndex((s) => s.id === session.id);
-  if (idx >= 0) {
-    sessions[idx] = toStore;
-  } else {
-    sessions.unshift(toStore);
+  try {
+    const sessions = getSessions();
+    const toStore = { ...session, image: null };
+    const idx = sessions.findIndex((s) => s.id === session.id);
+    if (idx >= 0) {
+      sessions[idx] = toStore;
+    } else {
+      sessions.unshift(toStore);
+    }
+    // Keep at most 20 sessions
+    if (sessions.length > 20) sessions.length = 20;
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+  } catch {
+    // Quota still exceeded — clear old sessions and retry with just this one
+    try {
+      const toStore = { ...session, image: null };
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify([toStore]));
+    } catch {
+      // Completely hosed — clear everything
+      localStorage.removeItem(SESSIONS_KEY);
+    }
   }
-  // Keep at most 20 sessions to avoid gradual quota creep
-  if (sessions.length > 20) sessions.length = 20;
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
 }
 
 export function deleteSession(id: string): void {
   const sessions = getSessions().filter((s) => s.id !== id);
-  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+  try {
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+  } catch {
+    localStorage.removeItem(SESSIONS_KEY);
+  }
   if (getCurrentSessionId() === id) {
     localStorage.removeItem(CURRENT_KEY);
   }
