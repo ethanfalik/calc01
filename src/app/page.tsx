@@ -31,7 +31,6 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize session from localStorage on mount
   useEffect(() => {
     const currentId = getCurrentSessionId();
     const allSessions = getSessions();
@@ -45,7 +44,6 @@ export default function Home() {
         return;
       }
     }
-    // No valid session — create one
     const newSession = createSession();
     saveSession(newSession);
     setCurrentSessionId(newSession.id);
@@ -63,8 +61,8 @@ export default function Home() {
   const solve = useCallback(
     async (base64: string) => {
       if (!session) return;
-      const baseSession = { ...session, image: base64, result: null };
-      updateSession(baseSession);
+      const updated = { ...session, image: base64, result: null };
+      updateSession(updated);
       setError(null);
       setLoading(true);
 
@@ -81,7 +79,7 @@ export default function Home() {
         }
 
         const data: SolveResult = await res.json();
-        updateSession({ ...baseSession, result: data });
+        updateSession({ ...session, image: base64, result: data });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
@@ -94,7 +92,6 @@ export default function Home() {
   const resolveFromText = useCallback(
     async (corrected: string) => {
       if (!session) return;
-      const currentSession = session;
       setError(null);
       setLoading(true);
 
@@ -111,7 +108,7 @@ export default function Home() {
         }
 
         const data: SolveResult = await res.json();
-        updateSession({ ...currentSession, result: data });
+        updateSession({ ...session, result: data });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
@@ -156,15 +153,11 @@ export default function Home() {
     }
   }, []);
 
-  const handleDeleteSession = useCallback(
-    (id: string) => {
-      deleteSession(id);
-      setSessions(getSessions());
-    },
-    []
-  );
+  const handleDeleteSession = useCallback((id: string) => {
+    deleteSession(id);
+    setSessions(getSessions());
+  }, []);
 
-  // Sticky notes
   const addNote = useCallback(() => {
     if (!session) return;
     const note: StickyNote = {
@@ -199,7 +192,6 @@ export default function Home() {
     [session, updateSession]
   );
 
-  // Chat
   const handleSendMessage = useCallback(
     async (message: string): Promise<string | null> => {
       if (!session) return null;
@@ -254,9 +246,12 @@ export default function Home() {
       )}
 
       {/* Header */}
-      <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border relative z-10">
-        <button onClick={startNewSession} className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold tracking-tight">calc01</h1>
+      <header className="flex items-center justify-between px-5 sm:px-7 py-3.5 border-b border-border relative z-10 bg-surface/80 backdrop-blur-sm">
+        <button onClick={startNewSession} className="flex items-center gap-2.5 group">
+          <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center text-white font-mono text-xs font-bold shrink-0 group-hover:bg-accent-light transition-colors">
+            c
+          </div>
+          <h1 className="text-base font-bold tracking-tight">calc01</h1>
         </button>
         <div className="flex items-center gap-3">
           <SessionHistory
@@ -269,7 +264,7 @@ export default function Home() {
           {(image || result) && (
             <button
               onClick={startNewSession}
-              className="text-sm text-muted hover:text-foreground transition-colors"
+              className="text-sm text-muted hover:text-foreground transition-colors font-medium"
             >
               New
             </button>
@@ -277,16 +272,22 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main content */}
-      <main className="flex-1 flex flex-col items-center w-full max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-10 relative z-[1]">
-        {!image && !result && (
-          <div className="flex-1 flex flex-col items-center justify-center w-full gap-6">
-            <div className="text-center space-y-2 mb-4">
-              <p className="text-2xl sm:text-3xl font-semibold tracking-tight">
+      {/* Main */}
+      <main className="flex-1 flex flex-col items-center w-full max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12 relative z-[1]">
+        {/* Landing state */}
+        {!image && !result && !loading && !error && (
+          <div className="flex-1 flex flex-col items-center justify-center w-full gap-8">
+            <div className="text-center space-y-4 mb-2">
+              <div className="flex items-center justify-center mb-6">
+                <div className="w-16 h-16 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent text-3xl font-light select-none">
+                  ∑
+                </div>
+              </div>
+              <p className="text-2xl sm:text-3xl font-bold tracking-tight">
                 Solve any equation
               </p>
-              <p className="text-muted text-sm sm:text-base">
-                Take a photo or upload an image of any math problem
+              <p className="text-muted text-sm sm:text-base max-w-xs mx-auto leading-relaxed">
+                Take a photo or upload an image of any math problem for step-by-step solutions
               </p>
             </div>
 
@@ -295,13 +296,13 @@ export default function Home() {
 
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-2 h-12 rounded-xl border border-border bg-surface hover:bg-surface-hover transition-colors text-sm font-medium"
+                className="w-full flex items-center justify-center gap-2.5 h-12 rounded-xl border border-border bg-surface hover:bg-surface-hover transition-colors text-sm font-medium"
               >
                 <svg
-                  className="w-5 h-5"
+                  className="w-4 h-4 text-muted"
                   fill="none"
                   viewBox="0 0 24 24"
-                  strokeWidth={1.5}
+                  strokeWidth={1.8}
                   stroke="currentColor"
                 >
                   <path
@@ -326,39 +327,40 @@ export default function Home() {
 
         {/* Loading state */}
         {loading && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <div className="flex-1 flex flex-col items-center justify-center gap-8">
             {image && (
               <img
                 src={image}
                 alt="Captured equation"
-                className="max-h-40 rounded-lg border border-border"
+                className="max-h-44 rounded-xl border border-border shadow-sm object-cover"
               />
             )}
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-              <span className="text-sm text-muted">
-                Recognizing and solving...
-              </span>
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative w-9 h-9">
+                <div className="absolute inset-0 rounded-full border-2 border-border" />
+                <div className="absolute inset-0 rounded-full border-2 border-t-accent animate-spin" />
+              </div>
+              <p className="text-sm text-muted font-medium">Recognizing and solving&hellip;</p>
             </div>
           </div>
         )}
 
         {/* Error state */}
         {error && !loading && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <div className="flex-1 flex flex-col items-center justify-center gap-5">
             {image && (
               <img
                 src={image}
                 alt="Captured equation"
-                className="max-h-40 rounded-lg border border-border"
+                className="max-h-44 rounded-xl border border-border shadow-sm object-cover"
               />
             )}
-            <div className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 px-4 py-3 rounded-xl text-sm max-w-sm text-center">
+            <div className="bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 text-red-700 dark:text-red-400 px-5 py-4 rounded-xl text-sm max-w-sm text-center leading-relaxed">
               {error}
             </div>
             <button
               onClick={startNewSession}
-              className="text-sm text-accent hover:underline"
+              className="text-sm font-medium text-accent hover:text-accent-light underline underline-offset-2 transition-colors"
             >
               Try again
             </button>
@@ -372,7 +374,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="text-center text-xs text-muted py-4 border-t border-border relative z-10">
+      <footer className="text-center text-xs text-muted/60 py-4 border-t border-border relative z-10">
         Powered by AI vision &mdash; results may need verification
       </footer>
 

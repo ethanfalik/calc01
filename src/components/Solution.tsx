@@ -14,39 +14,35 @@ export default function Solution({
   onReset: () => void;
 }) {
   return (
-    <div className="w-full space-y-8">
+    <div className="w-full space-y-6">
       {/* Recognized equation */}
       <div className="space-y-3">
         {image && (
           <img
             src={image}
             alt="Equation"
-            className="max-h-28 rounded-lg border border-border object-cover"
+            className="max-h-28 rounded-xl border border-border object-cover shadow-sm"
           />
         )}
-        <div className="overflow-x-auto py-2">
+        <div className="math-area">
           <Math display>{result.recognized}</Math>
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="h-px bg-border" />
-
       {/* Steps */}
-      <div className="space-y-4">
+      <div className="space-y-2.5">
+        <p className="text-[11px] uppercase tracking-widest font-semibold text-muted px-1 pb-1">
+          Solution Steps
+        </p>
         {result.steps.map((step, i) => (
-          <StepCard
-            key={i}
-            step={step}
-            index={i}
-            total={result.steps.length}
-          />
+          <StepCard key={i} step={step} index={i} />
         ))}
       </div>
 
       {/* Final answer */}
-      <div className="rounded-2xl bg-accent/[0.06] border border-accent/15 p-5 sm:p-6">
-        <p className="text-[11px] uppercase tracking-widest text-accent/70 mb-3 font-medium">
+      <div className="rounded-2xl border border-accent/25 bg-accent/[0.05] p-5 sm:p-6 relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" />
+        <p className="text-[11px] uppercase tracking-widest font-semibold text-accent mb-3">
           Answer
         </p>
         <div className="overflow-x-auto">
@@ -56,7 +52,7 @@ export default function Solution({
 
       <button
         onClick={onReset}
-        className="w-full h-12 rounded-xl bg-accent hover:bg-accent-light transition-colors text-white text-sm font-medium"
+        className="w-full h-12 rounded-xl bg-accent hover:bg-accent-light transition-all text-white text-sm font-semibold tracking-wide active:scale-[0.99]"
       >
         Solve Another
       </button>
@@ -67,39 +63,30 @@ export default function Solution({
 function StepCard({
   step,
   index,
-  total,
 }: {
   step: { title: string; content: string; detail?: string };
   index: number;
-  total: number;
 }) {
   const [showDetail, setShowDetail] = useState(false);
 
   return (
-    <div className="relative flex gap-4">
-      {/* Timeline */}
-      <div className="flex flex-col items-center">
-        <div className="w-7 h-7 rounded-full bg-accent/10 text-accent text-xs font-semibold flex items-center justify-center flex-shrink-0">
-          {index + 1}
+    <div className="step-card">
+      <div className="step-card-accent" />
+      <div className="pl-3">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="step-number">{index + 1}</div>
+          <p className="step-title">{step.title}</p>
         </div>
-        {index < total - 1 && (
-          <div className="w-px flex-1 bg-border mt-2" />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="pb-6 min-w-0 flex-1">
-        <p className="text-sm font-medium text-muted mb-2">{step.title}</p>
-        <div className="overflow-x-auto py-1">
+        <div className="step-math">
           <Math display>{step.content}</Math>
         </div>
         {step.detail && (
           <>
             <button
               onClick={() => setShowDetail(!showDetail)}
-              className="mt-2 text-xs text-accent/70 hover:text-accent transition-colors flex items-center gap-1"
+              className="mt-3 text-xs text-accent/70 hover:text-accent transition-colors flex items-center gap-1.5"
             >
-              {showDetail ? "Hide" : "Why?"}
+              {showDetail ? "Hide explanation" : "Why this step?"}
               <svg
                 className={`w-3 h-3 transition-transform ${showDetail ? "rotate-180" : ""}`}
                 fill="none"
@@ -111,7 +98,7 @@ function StepCard({
               </svg>
             </button>
             {showDetail && (
-              <p className="mt-2 text-sm text-muted leading-relaxed">
+              <p className="mt-2 text-sm text-muted leading-relaxed border-t border-border pt-3">
                 {step.detail}
               </p>
             )}
