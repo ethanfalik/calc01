@@ -63,8 +63,8 @@ export default function Home() {
   const solve = useCallback(
     async (base64: string) => {
       if (!session) return;
-      const updated = { ...session, image: base64, result: null };
-      updateSession(updated);
+      const baseSession = { ...session, image: base64, result: null };
+      updateSession(baseSession);
       setError(null);
       setLoading(true);
 
@@ -81,7 +81,7 @@ export default function Home() {
         }
 
         const data: SolveResult = await res.json();
-        updateSession({ ...session, image: base64, result: data });
+        updateSession({ ...baseSession, result: data });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
@@ -94,6 +94,7 @@ export default function Home() {
   const resolveFromText = useCallback(
     async (corrected: string) => {
       if (!session) return;
+      const currentSession = session;
       setError(null);
       setLoading(true);
 
@@ -110,7 +111,7 @@ export default function Home() {
         }
 
         const data: SolveResult = await res.json();
-        updateSession({ ...session, result: data });
+        updateSession({ ...currentSession, result: data });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong");
       } finally {

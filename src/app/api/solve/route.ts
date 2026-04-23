@@ -138,7 +138,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const parsed = JSON.parse(content);
+    // Strip markdown code fences if present
+    const stripped = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    // Fix unescaped backslashes (e.g. LaTeX \sqrt → \\sqrt) that make JSON invalid
+    const sanitized = stripped.replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
+    const parsed = JSON.parse(sanitized);
 
     if (!parsed.recognized || !parsed.steps || !parsed.finalAnswer) {
       return NextResponse.json(

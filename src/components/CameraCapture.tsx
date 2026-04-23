@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 export default function CameraCapture({
   onCapture,
@@ -11,34 +11,59 @@ export default function CameraCapture({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // The video element only mounts after setStreaming(true), so we attach the
+  // stream in an effect instead of immediately after getUserMedia resolves.
+  useEffect(() => {
+    if (!streaming) return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (video && stream) {
+      video.srcObject = stream;
+      video.play().catch((err) => {
+        if (err instanceof Error && err.name !== "AbortError") {
+          console.error("Video play error:", err);
+        }
+      });
+    }
+  }, [streaming]);
 
   const startCamera = useCallback(async () => {
+    // Detect mobile synchronously, before any await, so the click stays within
+    // the user gesture context (required by iOS Safari).
+    const isMobile =
+      /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ||
+      navigator.maxTouchPoints > 1;
+
+    if (isMobile || !navigator.mediaDevices?.getUserMedia) {
+      fileInputRef.current?.click();
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
       setStreaming(true);
     } catch {
-      // Fallback: trigger file input with capture
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/*";
-      input.capture = "environment";
-      input.onchange = () => {
-        const file = input.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => onCapture(reader.result as string);
-        reader.readAsDataURL(file);
-      };
-      input.click();
+      // Desktop fallback — programmatic clicks work fine outside a gesture on desktop
+      fileInputRef.current?.click();
     }
-  }, [onCapture]);
+  }, []);
+
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => onCapture(reader.result as string);
+      reader.readAsDataURL(file);
+      e.target.value = "";
+    },
+    [onCapture]
+  );
 
   const capture = useCallback(() => {
     const video = videoRef.current;
@@ -53,7 +78,6 @@ export default function CameraCapture({
     ctx.drawImage(video, 0, 0);
     const base64 = canvas.toDataURL("image/jpeg", 0.85);
 
-    // Stop camera
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setStreaming(false);
@@ -95,29 +119,39 @@ export default function CameraCapture({
   }
 
   return (
-    <button
-      onClick={startCamera}
-      className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-accent hover:bg-accent-light transition-colors text-white text-sm font-medium"
-    >
-      <svg
-        className="w-5 h-5"
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth={1.5}
-        stroke="currentColor"
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <button
+        onClick={startCamera}
+        className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-accent hover:bg-accent-light transition-colors text-white text-sm font-medium"
       >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
-        />
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
-        />
-      </svg>
-      Take Photo
-    </button>
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+          />
+        </svg>
+        Take Photo
+      </button>
+    </>
   );
 }
